@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# ignore large files
+*.pt
+*.csv
+*.RData
+*.Rda
+*.pdf
+*.txt
+

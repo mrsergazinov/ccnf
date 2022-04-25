@@ -11,3 +11,7 @@
 *.pdf
 *.txt
 
+# ignore pre-complied code
+*.cpython-37.pyc
+__pycache__/
+*.py[cod]

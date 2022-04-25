@@ -8,8 +8,8 @@ class DataSet(Dataset):
     # info
     self.length = length
     self.pred_len = pred_len
-    self.seqs = [seq[1] for seq in seqs]
     self.labels = [seq[0] for seq in seqs]
+    self.seqs = [seq[1] for seq in seqs]
     
     # init
     len_idx = np.array([len(seq) for seq in self.seqs])

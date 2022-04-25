@@ -76,7 +76,7 @@ class CCNF:
                                         nn.Linear(self.hidden, length_out))
     
 
-    def fit(self, epochs, early_stopping=None):
+    def fit(self, epochs, batches_per_epoch=None, early_stopping=None):
         if early_stopping is None:
             early_stopping = epochs
         best_loss = None
@@ -88,6 +88,10 @@ class CCNF:
             val_loss = []
             epoch_time = time.time()
             curr_time = time.time()
+            
+            num_batches = None
+            if batches_per_epoch is not None:
+                num_batches = 0
             
             for i, (_, x, y) in enumerate(self.train_loader):
                 x, y = x.to(self.device), y.to(self.device)
@@ -108,6 +112,12 @@ class CCNF:
                     with open(os.path.join(self.save_path, 'log_train.txt'), 'a') as f:
                         pprint(prnt_str1, f)
                         pprint(prnt_str2, f)
+                
+                if batches_per_epoch is not None:
+                    num_batches += 1
+                    if num_batches == batches_per_epoch:
+                        break
+
             
             self.model.eval()
             with torch.no_grad():

@@ -2,6 +2,7 @@ import argparse
 from model.solver import *
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--exp_id', type=int, default=0, help='unique experiment id')
 parser.add_argument('--dataset', type=str, default='electricity', help='[electricity, ...]')
 parser.add_argument('--batch_size', type=int, default=256, help='batch size')
 parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
@@ -18,5 +19,5 @@ args = parser.parse_args()
 args.gpu = True if args.gpu==1 else False
 
 if __name__ == "__main__":
-    solver = CCNF(args.dataset, args.batch_size, args.length, args.pred_len, args.hidden, args.gpu, args.gpu_id, args.save_path)
+    solver = CCNF(args.exp_id, args.dataset, args.batch_size, args.length, args.pred_len, args.hidden, args.gpu, args.gpu_id, args.save_path)
     solver.fit(args.epochs, args.batches_per_epoch, args.early_stopping)

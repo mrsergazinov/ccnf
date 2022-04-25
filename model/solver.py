@@ -118,7 +118,6 @@ class CCNF:
                     if num_batches == batches_per_epoch:
                         break
 
-            
             self.model.eval()
             with torch.no_grad():
                 for i, (_, x, y) in enumerate(self.val_loader):

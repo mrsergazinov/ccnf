@@ -27,7 +27,7 @@ class ElectricityData():
         self.est_corr = self.estimate_corr()
 
         # create datasets and dataloaders
-        train_seqs, test_seqs = [], [], []
+        train_seqs, test_seqs = [], []
         train_seqs += [[k, self.train_data[k].astype(np.float32)] for k in self.train_data.keys()]
         test_seqs += [[k, self.train_data[k].astype(np.float32)] for k in self.test_data.keys()]
         self.train_data = DataSet(train_seqs, self.length, self.pred_len)
@@ -104,7 +104,7 @@ class ElectricityData():
         X = []
         for j, k in enumerate(self.train_data.keys()):
             start = random_spaced(0, len(self.train_data[k])-length, 
-                                    length*10, samples).astype(int)
+                                    length // 2, samples).astype(int)
             end = start + length
             for i in range(len(start)):
                 if (np.any(self.train_data[k][start[i]:end[i]] != 0)):

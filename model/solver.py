@@ -27,7 +27,7 @@ class CCNF:
         self.length = length
         self.pred_len = pred_len
         self.train_loader = self.data.train_loader
-        self.val_loader = self.data.val_loader
+        # self.val_loader = self.data.val_loader
         self.test_loader = self.data.test_loader
 
         self.est_corr = self.data.est_corr.to(self.device)
@@ -85,7 +85,7 @@ class CCNF:
         count = 0
         for epoch in range(epochs):
             train_loss = []
-            val_loss = []
+            # val_loss = []
             epoch_time = time.time()
             curr_time = time.time()
             
@@ -118,33 +118,37 @@ class CCNF:
                     if num_batches == batches_per_epoch:
                         break
 
-            self.model.eval()
-            with torch.no_grad():
-                for i, (_, x, y) in enumerate(self.val_loader):
-                    x, y = x.to(self.device), y.to(self.device)
-                    loss = -self.model.log_prob(x, y).mean()
-                    val_loss.append(loss.item())
-            self.model.train()
+            # self.model.eval()
+            # with torch.no_grad():
+            #     for i, (_, x, y) in enumerate(self.val_loader):
+            #         x, y = x.to(self.device), y.to(self.device)
+            #         loss = -self.model.log_prob(x, y).mean()
+            #         val_loss.append(loss.item())
+            # self.model.train()
             
             # compute average train loss
             train_loss = np.average(train_loss)
-            val_loss = np.average(val_loss)
+            # val_loss = np.average(val_loss)
 
-            prnt_str = "epoch: {}, epoch time: {}, loss: {}, validation loss: {}".format(epoch+1, time.time() - curr_time, train_loss, val_loss)
+            # prnt_str = "epoch: {}, epoch time: {}, loss: {}, validation loss: {}".format(epoch+1, time.time() - curr_time, train_loss, val_loss)
+            prnt_str = "epoch: {}, epoch time: {}, loss: {}".format(epoch+1, time.time() - curr_time, train_loss)
             print(prnt_str)
             with open(os.path.join(self.save_path, 'log_eval.txt'), 'a') as f:
                 pprint(prnt_str, f)
 
             # save best model
-            if (best_loss is None) or (val_loss < best_loss):
-                torch.save(self.model.state_dict(), os.path.join(self.save_path, 'best_model.pt'))
-                best_loss = val_loss
-                count = 0
-            else:
-                count += 1
-                if count >= early_stopping:
-                    print('Early stopping...')
-                    break
+            # if (best_loss is None) or (val_loss < best_loss):
+            #     torch.save(self.model.state_dict(), os.path.join(self.save_path, 'best_model.pt'))
+            #     best_loss = val_loss
+            #     count = 0
+            # else:
+            #     count += 1
+            #     if count >= early_stopping:
+            #         print('Early stopping...')
+            #         break
+
+            torch.save(self.model.state_dict(), os.path.join(self.save_path, 'best_model.pt'))
+        
 
 
     def evaluate(self):

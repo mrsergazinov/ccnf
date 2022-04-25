@@ -34,7 +34,7 @@ class ElectricityData():
         self.test_data = DataSet(test_seqs, self.length, self.pred_len)
 
         self.train_loader = DataLoader(self.train_data, batch_size=batch_size, shuffle=True)
-        self.test_loader = DataLoader(self.val_data, batch_size=batch_size, shuffle=False)
+        self.test_loader = DataLoader(self.test_data, batch_size=batch_size, shuffle=False)
 
     def scale(self, k, seqs):
         out = torch.zeros_like(seqs)

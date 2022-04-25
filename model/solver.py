@@ -80,7 +80,7 @@ class CCNF:
         if early_stopping is None:
             early_stopping = epochs
         best_loss = None
-        niters = len(self.train_loader)
+        niters = len(self.train_loader) if batches_per_epoch is None else batches_per_epoch
         optimizer = torch.optim.Adam([p for p in self.model.parameters() if p.requires_grad==True], lr=1e-4)
         count = 0
         for epoch in range(epochs):
@@ -88,10 +88,6 @@ class CCNF:
             # val_loss = []
             epoch_time = time.time()
             curr_time = time.time()
-            
-            num_batches = None
-            if batches_per_epoch is not None:
-                num_batches = 0
             
             for i, (_, x, y) in enumerate(self.train_loader):
                 x, y = x.to(self.device), y.to(self.device)
@@ -102,10 +98,10 @@ class CCNF:
                 train_loss.append(loss.item())
 
                 if (i+1) % 100 == 0:
-                    prnt_str1 = '\titers: {0} / {1}, epoch: {2} | loss: {3:.3f}'.format((i+1), niters, epoch + 1, loss.item())
+                    prnt_str1 = 'iters: {0} / {1}, epoch: {2} | loss: {3:.3f}'.format((i+1), niters, epoch + 1, loss.item())
                     speed = (time.time() - curr_time) / (i+1)
                     left_time = speed * ((epochs - epoch) * niters - (i+1))
-                    prnt_str2 = '\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time)
+                    prnt_str2 = 'speed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time)
 
                     print(prnt_str1)
                     print(prnt_str2)
@@ -114,8 +110,7 @@ class CCNF:
                         pprint(prnt_str2, f)
                 
                 if batches_per_epoch is not None:
-                    num_batches += 1
-                    if num_batches == batches_per_epoch:
+                    if i == batches_per_epoch:
                         break
 
             # self.model.eval()

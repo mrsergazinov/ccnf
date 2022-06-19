@@ -1,0 +1,36 @@
+#Hyper Params
+exp_id: 0
+batch_size: 64
+lr: 0.0002
+num_epochs: 100
+n_workers: 10
+loader: base
+early_stopping: 5
+max_gradient_norm: 0.01
+
+# Dataset
+ds_name: electricity
+train_samples: 450000
+test_samples: 50000
+val_samples: 50000
+input_size: 5
+output_size: 1
+total_time_steps: 192
+num_encoder_steps: 168
+static_input_loc:
+- 4
+input_obs_loc:
+- 0
+known_categorical_inputs:
+- 0
+known_regular_inputs:
+- 1
+- 2
+- 3
+category_counts:
+- 369
+
+# Model
+num_flows: 10
+hidden: 1024
+

@@ -1,21 +1,17 @@
-import argparse
-from model.solver import *
+# import argparse
+# from model.solver import *
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--exp_id', type=int, default=0, help='unique experiment id')
-parser.add_argument('--dataset', type=str, default='electricity', help='[electricity, ...]')
-parser.add_argument('--batch_size', type=int, default=256, help='batch size')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
-parser.add_argument('--early_stopping', type=int, default=None, help='epochs to early stopping')
-parser.add_argument('--length', type=int, default=24*7, help='history length')
-parser.add_argument('--pred_len', type=int, default=24, help='prediction length')
-parser.add_argument('--hidden', type=int, default=1024, help='hidden dimension')
-parser.add_argument('--gpu', type=int, default=1, help='use cuda')
-parser.add_argument('--gpu_id', type=int, default=1, help='gpu id to use')
-parser.add_argument('--save_path', type=str, default='./checkpoints', help='directory to save models')
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--exp_name', type=str, default=None)
+# parser.add_argument('--conf_file_path', type=str, default=None)
+# parser.add_argument('--gpu', type=int, default=-1)
+# parser.add_argument('--seed', type=int, default=None)
+# args = parser.parse_args()
+# args.gpu = 'cuda:{}'.format(args.gpu) if args.gpu >= 0 else 'cpu'
 
-args = parser.parse_args()
-args.gpu = True if args.gpu==1 else False
-if __name__ == "__main__":
-    solver = CCNF(args.exp_id, args.dataset, args.batch_size, args.length, args.pred_len, args.hidden, args.gpu, args.gpu_id, args.save_path)
-    solver.evaluate()
+# if __name__ == "__main__":
+#     conf = Config(conf_file_path=args.conf_file_path, seed=args.seed, device=args.gpu, exp_name=args.exp_name)
+#     print(f'\n{conf}')
+
+#     solver = CCNF(conf)
+#     solver.evaluate()

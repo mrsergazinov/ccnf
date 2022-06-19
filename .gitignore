@@ -10,8 +10,14 @@
 *.Rda
 *.pdf
 *.txt
+*.npz
+*.out
 
 # ignore pre-complied code
 *.cpython-37.pyc
 __pycache__/
 *.py[cod]
+*.pyc
+
+# ignore tensorboard outputs
+events*

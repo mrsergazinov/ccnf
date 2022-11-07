@@ -30,38 +30,7 @@ from scipy.stats import norm as normal
 import dataset
 from utils.nearcorr import *
 
-
-# Loss functions.
-def pytorch_quantile_loss(y, y_pred, quantile):
-  """Computes quantile loss for tensorflow.
-
-  Standard quantile loss as defined in the "Training Procedure" section of
-  the main TFT paper
-
-  Args:
-    y: Targets
-    y_pred: Predictions
-    quantile: Quantile to use for loss calculations (between 0 & 1)
-
-  Returns:
-    Tensor for quantile loss.
-  """
-
-  # Checks quantile
-  if quantile < 0 or quantile > 1:
-    raise ValueError(
-        'Illegal quantile value={}! Values should be between 0 and 1.'.format(
-            quantile))
-
-  prediction_underflow = y - y_pred
-  q_loss = quantile * torch.max(prediction_underflow, torch.zeros_like(prediction_underflow)) + (
-      1. - quantile) * torch.max(-prediction_underflow, torch.zeros_like(prediction_underflow))
-
-  return torch.sum(q_loss, axis=-1)
-
-
-
-# Generic.
+# data extraction functions
 def get_single_col_by_input_type(input_type, column_definition):
   """Returns name of single column.
 
@@ -76,7 +45,6 @@ def get_single_col_by_input_type(input_type, column_definition):
     raise ValueError('Invalid number of columns for {}'.format(input_type))
 
   return l[0]
-
 
 def extract_cols_from_data_type(data_type, column_definition,
                                 excluded_input_types):
@@ -95,31 +63,6 @@ def extract_cols_from_data_type(data_type, column_definition,
       for tup in column_definition
       if tup[1] == data_type and tup[2] not in excluded_input_types
   ]
-
-
-def numpy_normalised_quantile_loss(y, y_pred, quantile):
-  """Computes normalised quantile loss for numpy arrays.
-
-  Uses the q-Risk metric as defined in the "Training Procedure" section of the
-  main TFT paper.
-
-  Args:
-    y: Targets
-    y_pred: Predictions
-    quantile: Quantile to use for loss calculations (between 0 & 1)
-
-  Returns:
-    Float for normalised quantile loss.
-  """
-  prediction_underflow = y - y_pred
-  weighted_errors = quantile * np.maximum(prediction_underflow, 0.) \
-      + (1. - quantile) * np.maximum(-prediction_underflow, 0.)
-
-  quantile_loss = weighted_errors.mean()
-  normaliser = y.abs().mean()
-
-  return 2 * quantile_loss / normaliser
-
 
 # OS related functions.
 def create_folder_if_not_exist(directory):
@@ -163,6 +106,7 @@ def data_csv_path(exp_name):
 
     return csv_map[exp_name]
 
+# data statistics functions
 def compute_corr(outputs):
     # sample series
     sample = np.random.choice(outputs.shape[0], outputs.shape[0] // 5, replace=False)
@@ -189,6 +133,7 @@ def compute_corr(outputs):
 
     return est_corr
 
+# data transforms
 class IntegralTransform:
   def __init__(self, data):
     self.x = None
@@ -212,3 +157,79 @@ class IntegralTransform:
     ind = np.searchsorted(self.y, y, side='right') - 1
     out = normal.cdf(self.x[ind])
     return out
+
+def unnormalize_tensor(data_formatter, data, identifier):
+  data = pd.DataFrame(
+    data.detach().cpu().numpy(),
+    columns=[
+        't+{}'.format(i)
+        for i in range(data.shape[1])
+    ])
+
+  data['identifier'] = np.array(identifier)
+  data = data_formatter.format_predictions(data)
+
+  return data.drop(columns=['identifier']).values
+
+# loss functions
+class QuantileLoss(torch.nn.Module):
+  # From: https://medium.com/the-artificial-impostor/quantile-regression-part-2-6fdbc26b2629
+
+  def __init__(self, quantiles):
+      # takes a list of quantiles
+      super().__init__()
+      self.quantiles = quantiles
+
+  def numpy_normalised_quantile_loss(self, y_pred, y, quantile):
+      """Computes normalised quantile loss for numpy arrays.
+      Uses the q-Risk metric as defined in the "Training Procedure" section of the
+      main TFT paper.
+      Args:
+        y: Targets
+        y_pred: Predictions
+        quantile: Quantile to use for loss calculations (between 0 & 1)
+      Returns:
+        Float for normalised quantile loss.
+      """
+      if isinstance(y_pred, torch.Tensor):
+          y_pred = y_pred.detach().cpu().numpy()
+
+      if len(y_pred.shape) == 3:
+          ix = self.quantiles.index(quantile)
+          y_pred = y_pred[..., ix]
+
+      if isinstance(y, torch.Tensor):
+          y = y.detach().cpu().numpy()
+
+      prediction_underflow = y - y_pred
+      weighted_errors = quantile * np.maximum(prediction_underflow, 0.) \
+                        + (1. - quantile) * np.maximum(-prediction_underflow, 0.)
+
+      quantile_loss = weighted_errors.mean()
+      normaliser = np.abs(y).mean()
+
+      return 2 * quantile_loss / normaliser
+
+  def forward(self, preds, target, ret_losses=True):
+      assert not target.requires_grad
+      assert preds.size(0) == target.size(0)
+      losses = []
+
+      for i, q in enumerate(self.quantiles):
+          errors = target - preds[:, :, i]
+          losses.append(
+              torch.max(
+                  (q - 1) * errors,
+                  q * errors
+              ).unsqueeze(1))
+      loss = torch.mean(
+          torch.sum(torch.cat(losses, dim=1), dim=1))
+      if ret_losses:
+          return loss, losses
+      return loss
+
+def smape_loss(forecast, actual):
+  # Symmetric Mean Absolute Percentage Error (SMAPE)
+  sequence_length = forecast.shape[1]
+  sumf = np.sum(np.abs(forecast - actual) / (np.abs(actual) + np.abs(forecast)), axis=1)
+  return np.mean((2 * sumf) / sequence_length)

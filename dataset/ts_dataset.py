@@ -33,7 +33,7 @@ class TSDataset(Dataset):
         self.time = None
         self.identifiers = None
 
-        # set up the integral transform (-> enforce Gaussian marginals)
+        # set up the integral transform (enforce Gaussian marginals)
         if self.params['integral_transform']:
             # fit the integral transform on training data
             self.train()
@@ -44,8 +44,7 @@ class TSDataset(Dataset):
         max_samples = self.params['train_samples']
         if path.exists(utils.csv_path_to_folder(self.csv) + "processed_traindata.npz"):
             f = np.load(utils.csv_path_to_folder(self.csv) + "processed_traindata.npz", allow_pickle=True)
-            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
-                f.files[3]]
+            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[f.files[3]]
         else:
             self.preprocess(self.train_set, max_samples)
             np.savez(utils.csv_path_to_folder(self.csv) + "processed_traindata.npz", self.inputs, self.outputs,
@@ -57,21 +56,19 @@ class TSDataset(Dataset):
         max_samples = self.params['test_samples']
         if path.exists(utils.csv_path_to_folder(self.csv) + "processed_testdata.npz"):
             f = np.load(utils.csv_path_to_folder(self.csv) + "processed_testdata.npz", allow_pickle=True)
-            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
-                f.files[3]]
+            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[f.files[3]]
         else:
             self.preprocess(self.test_set, max_samples)
-            np.savez(utils.csv_path_to_folder(self.csv) + "processed_testdata.npz", self.inputs, self.outputs,
-                     self.time,
-                     self.identifiers)
+            np.savez(utils.csv_path_to_folder(self.csv) + "processed_testdata.npz", self.inputs, self.outputs, 
+                    self.time, 
+                    self.identifiers)
 
     def val(self):
         self.label = 'val'
         max_samples = self.params['val_samples']
         if path.exists(utils.csv_path_to_folder(self.csv) + "processed_validdata.npz"):
             f = np.load(utils.csv_path_to_folder(self.csv) + "processed_validdata.npz", allow_pickle=True)
-            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
-                f.files[3]]
+            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[f.files[3]]
         else:
             self.preprocess(self.valid_set, max_samples)
             np.savez(utils.csv_path_to_folder(self.csv) + "processed_validdata.npz", self.inputs, self.outputs,
@@ -147,7 +144,9 @@ class TSDataset(Dataset):
             print('Loaded estimated correlation matrix...')
             return torch.tensor(est_corr)
         else:
+            print('Estimating correlation matrix...')
             est_corr = utils.compute_corr(self.outputs)
+            print('Estimated correlation matrix.')
             np.savez(utils.csv_path_to_folder(self.csv) + "est_corrmatrix.npz", est_corr)
             return torch.tensor(est_corr)
 
@@ -156,8 +155,9 @@ class TSDataset(Dataset):
         num_encoder_steps = int(self.params['num_encoder_steps'])
         x = self.outputs[index, :num_encoder_steps, 0].astype(np.float32)
         y = self.outputs[index, num_encoder_steps:, 0].astype(np.float32)
+        id = self.identifiers[index].tolist()
 
-        return x, y
+        return x, y, id
 
     def __len__(self):
         return self.inputs.shape[0]
@@ -165,26 +165,3 @@ class TSDataset(Dataset):
     def _get_single_col_by_type(self, input_type):
         """Returns name of single column for input type."""
         return utils.get_single_col_by_input_type(input_type, self.params['column_definition'])
-
-
-@click.command()
-@click.option('--conf_file_path', type=str, default="./conf/electricity.yaml")
-def main(conf_file_path):
-    import dataset.utils as utils
-    from config import Config
-
-    conf = Config(conf_file_path=conf_file_path, seed=15, exp_name="test", log=False)
-    data_formatter = utils.make_data_formatter(conf.ds_name)
-    dataset_train = TSDataset(conf, data_formatter)
-    dataset_train.train()
-
-    for i in range(10):
-        # 192 x ['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
-        x = dataset_train[i]['inputs']
-        # 24 x ['power_usage']
-        y = dataset_train[i]['outputs']
-        print(f'Example #{i}: x.shape={x.shape}, y.shape={y.shape}')
-
-
-if __name__ == "__main__":
-    main()

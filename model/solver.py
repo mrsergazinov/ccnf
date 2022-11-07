@@ -16,6 +16,7 @@ from pprint import pprint
 from model.rnvp import *
 from dataset.electricity import *
 from dataset.ts_dataset import *
+from dataset.utils import QuantileLoss, smape_loss, unnormalize_tensor
 
 class CCNF:
     def __init__(self, conf):
@@ -31,12 +32,18 @@ class CCNF:
         dataset_train.train()
         dataset_val = loader(self.conf, self.data_formatter)
         dataset_val.val()
+        dataset_test = loader(self.conf, self.data_formatter)
+        dataset_test.test()
         self.train_loader = DataLoader(
             dataset=dataset_train, batch_size=conf.batch_size,
             num_workers=conf.n_workers, shuffle=True, pin_memory=True,
         )
         self.val_loader = DataLoader(
             dataset=dataset_val, batch_size=conf.batch_size,
+            num_workers=conf.n_workers, shuffle=False, pin_memory=True,
+        )
+        self.test_loader = DataLoader(
+            dataset=dataset_test, batch_size=conf.batch_size,
             num_workers=conf.n_workers, shuffle=False, pin_memory=True,
         )
         
@@ -46,9 +53,11 @@ class CCNF:
                                 self.est_corr[:self.conf.num_encoder_steps, :self.conf.num_encoder_steps].inverse())
         self.cov_marg = self.est_corr[:self.conf.num_encoder_steps, :self.conf.num_encoder_steps]
         self.cov_cond = self.est_corr[self.conf.num_encoder_steps:, self.conf.num_encoder_steps:] - \
-                                torch.matmul(self.pred_mat, self.est_corr[:self.conf.num_encoder_steps, self.conf.num_encoder_steps:])
+                                torch.matmul(self.pred_mat, self.est_corr[:self.conf.num_encoder_steps, 
+                                    self.conf.num_encoder_steps:])
         self.cov_marg = self.cov_marg.type(torch.float32)
         self.cov_cond = self.cov_cond.type(torch.float32)
+        self.pred_mat = self.pred_mat.type(torch.float32)
         prior_x = distributions.MultivariateNormal(torch.zeros(self.conf.num_encoder_steps).to(self.device), 
                                 self.cov_marg)
         prior_y = distributions.MultivariateNormal(torch.zeros(self.conf.num_decoder_steps).to(self.device), 
@@ -62,7 +71,11 @@ class CCNF:
         self.model = self.model.to(self.device)      
 
         # init summary writer
-        self.sw = SummaryWriter(self.conf.exp_log_path)     
+        self.sw = SummaryWriter(self.conf.exp_log_path)  
+
+        # loss for inference
+        # TODO: add more quantiles
+        self.loss = QuantileLoss([0.5])   
 
     def build(self):
         nets_x = self.net(self.conf.num_encoder_steps, self.conf.num_encoder_steps, True)
@@ -108,7 +121,7 @@ class CCNF:
             epoch_time = time.time()
             curr_time = time.time()
             
-            for i, (x, y) in enumerate(self.train_loader):
+            for i, (x, y, id) in enumerate(self.train_loader):
                 x, y = x.to(self.device), y.to(self.device)
 
                 loss, cache = self.model.log_prob(x, y)
@@ -117,19 +130,7 @@ class CCNF:
                 loss.backward()
                 clip_grad_norm_(self.model.parameters(), self.conf.max_grad_norm)
                 train_loss.append(loss.item())
-                optimizer.step(None)
-
-                # track exploding gradients -> stop training
-                if epoch > 0 or i > 1000:
-                    if loss.item() > 1000:
-                        print(cache)
-                        for i in range(cache['z1'].shape[0]):
-                            self.sw.add_histogram('error/z1_hist', -cache['z1'][i], i)
-                            self.sw.add_histogram('error/z2_hist', -cache['z2'][i], i)
-                            self.sw.add_histogram('error/logp', -cache['logp'][i], i)
-                        self.sw.add_histogram('error/prior_x', -cache['prior_x'], 0)
-                        self.sw.add_histogram('error/prior_y', -cache['prior_y'], 0)
-                        return
+                optimizer.step()
 
                 if (i+1) % 100 == 0:
                     prnt_str1 = 'iters: {0} / {1}, epoch: {2} | loss: {3:.3f}'.format((i+1), niters, epoch + 1, loss.item())
@@ -143,14 +144,14 @@ class CCNF:
                     print(prnt_str2)
                     # plot batch normalization
                     for i in range(self.conf.num_encoder_steps):
-                        self.sw.add_histogram('bn/encoder{0}'.format(i), cache['cache_batch']['x1'][:, i], batches)
+                        self.sw.add_histogram('hist/x{0}'.format(i), cache['cache_batch']['x1'][:, i], batches)
                     for i in range(self.conf.num_decoder_steps):
-                        self.sw.add_histogram('bn/decoder{0}'.format(i), cache['cache_batch']['x2'][:, i], batches)
+                        self.sw.add_histogram('hist/y{0}'.format(i), cache['cache_batch']['x2'][:, i], batches)
                     batches += 1
 
             self.model.eval()
             with torch.no_grad():
-                for i, (x, y) in enumerate(self.val_loader):
+                for i, (x, y, id) in enumerate(self.val_loader):
                     x, y = x.to(self.device), y.to(self.device)
                     loss, cache = self.model.log_prob(x, y)
                     loss = -loss.mean()
@@ -177,26 +178,38 @@ class CCNF:
                     break
         torch.save(self.model.state_dict(), os.path.join(self.conf.exp_log_path, 'last_model.pt'))
 
-    # def evaluate(self):
-    #     self.model.load_state_dict(torch.load(os.path.join(self.save_path, 'best_model.pt')))
-    #     self.model.eval()
-    #     with torch.no_grad():
-    #         rmse, mae = [], []
-    #         for i, (k, x, y) in enumerate(self.test_loader):
-    #             x, y = x.to(self.device), y.to(self.device)
-    #             _, _, _, y_pred = self.model.g(x, y)
-    #             y, y_pred = self.data.unscale(k, y), self.data.unscale(k, y_pred)
-    #             rmse += ((y - y_pred) ** 2).mean(dim=1).sqrt().tolist()
-    #             mae += (y - y_pred).abs().mean(dim=1).tolist()
-    #             if (i % 100 == 0):
-    #                 prnt_str = "Samples processed: {0} / {1}".format(i, len(self.test_loader))
-    #                 print(prnt_str)
-    #                 with open(os.path.join(self.save_path, 'log_eval.txt'), 'a') as f:
-    #                     pprint(prnt_str, f)
-    #         prnt_str = '/n RMSE: {0:.3f}, MAE: {1:.3f}'.format(np.median(rmse), np.median(mae))
-    #         print(prnt_str)
-    #         with open(os.path.join(self.save_path, 'log_eval.txt'), 'a') as f:
-    #             pprint(prnt_str, f)
+    def evaluate(self):
+        self.model.load_state_dict(torch.load(os.path.join(self.conf.exp_log_path, 'best_model.pt'), 
+            map_location=self.device))
+        self.model.eval()
+
+        # return self.test_loader, self.data_formatter, self.model, self.loss
+
+        with torch.no_grad():
+            p50_risk = []
+            smape = []
+            for i, (x, y, id) in enumerate(self.test_loader):
+                x, y = x.to(self.device), y.to(self.device)
+                dummy_y = torch.zeros_like(y)
+                _, _, _, y_pred = self.model.g(x, dummy_y)
+
+                #TODO: model should predict quantiles, quantile predictions should be attached along last axis
+                # below is temp. fix
+                y_pred = y_pred.unsqueeze(-1)
+
+                # compute loss
+                loss, _ = self.loss(y_pred, y)
+                smape.append(smape_loss(y_pred.squeeze().detach().cpu().numpy(), y.detach().cpu().numpy()))
+                
+                # unnormalize tensor
+                target = unnormalize_tensor(self.data_formatter, y, id[0][0])
+                p50_forecast = unnormalize_tensor(self.data_formatter, y_pred.squeeze(), id[0][0])
+                
+                # compute risk
+                p50_risk.append(self.loss.numpy_normalised_quantile_loss(p50_forecast, target, 0.5))
+
+            prnt_str = '/n SMAPE: {0:.3f} | P50 Risk: {1:.3f}'.format(np.mean(smape), np.mean(p50_risk))
+            print(prnt_str)
     
     # def getbestmodel(self):
     #     self.model.load_state_dict(torch.load(os.path.join(self.save_path, 'best_model.pt')))

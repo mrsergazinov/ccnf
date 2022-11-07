@@ -31,6 +31,9 @@ category_counts:
 - 369
 
 # Model
-num_flows: 10
-hidden: 1024
+num_flows: 16
+hidden: 256
+
+# Addiotional data transforms
+integral_transform: True
 

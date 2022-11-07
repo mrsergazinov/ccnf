@@ -39,14 +39,15 @@ class Config(object):
     HOSTNAME = socket.gethostname()
     LOG_PATH = Path('./logs/')
 
-    def __init__(self, conf_file_path=None, seed=None, exp_name=None, device=None, log=True):
+    def __init__(self, conf_file_path=None, seed=None, exp_name=None, device=None, log=True, exp_log_path=None):
         # type: (str, int, str, bool) -> None
         """
         :param conf_file_path: optional path of the configuration file
         :param seed: desired seed for the RNG; if `None`, it will be chosen randomly
         :param exp_name: name of the experiment
-        :param: what device to use for training
+        :param device: which device to use for training
         :param log: `True` if you want to log each step; `False` otherwise
+        :param exp_log_path: optional, specify directory for experiment log files
         """
         self.exp_name = exp_name
         self.log_each_step = log
@@ -95,8 +96,15 @@ class Config(object):
         self.n_workers = y.get('n_workers', 1)  # type: int
         self.batch_size = y.get('batch_size', 64)  # type: int
         self.all_params = y  # type: dict
-        self.exp_log_path = self.project_log_path / exp_name / datetime.now().strftime(
-            "%m.%d.%Y_%H.%M.%S")
+        if exp_log_path is None:
+            self.exp_log_path = self.project_log_path / exp_name / datetime.now().strftime(
+                "%m.%d.%Y_%H.%M.%S")
+        else:
+            self.exp_log_path = exp_log_path
+        
+        # create log dir if does not exist
+        if not os.path.exists(self.exp_log_path):
+            os.makedirs(self.exp_log_path)
 
         self.device = device
 
@@ -110,7 +118,7 @@ class Config(object):
 
         ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
         text = ansi_escape.sub('', str(self))
-        with open(out_file_path, 'w') as out_file:
+        with open(out_file_path, 'w+') as out_file:
             print(text, file=out_file)
 
     def __str__(self):

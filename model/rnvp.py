@@ -10,15 +10,11 @@ class RealNVP(nn.Module):
                  nets_x2, nett_x2, mask_x2, prior_x1, prior_x2, 
                  pred_mat, cov_cond):
         super(RealNVP, self).__init__()
-        self.pred_mat = nn.Parameter(data=pred_mat, requires_grad=False)
-        self.cov_cond = nn.Parameter(data=cov_cond, requires_grad=False)
+        self.register_buffer('pred_mat', pred_mat)
+        self.register_buffer('cov_cond', cov_cond)
 
-        # self.batchnorm_x1 = nn.BatchNorm2d(self.pred_mat.shape[1])
-        # self.batchnorm_x2 = nn.BatchNorm2d(self.pred_mat.shape[0])
-        # self.batchnorm_x1 = nn.BatchNorm1d(self.pred_mat.shape[1])
-        # self.batchnorm_x2 = nn.BatchNorm1d(self.pred_mat.shape[0])
-        self.batchnorm_x1 = BatchNormInv()
-        self.batchnorm_x2 = BatchNormInv()
+        # self.batchnorm_x1 = BatchNormInv(num_features=pred_mat.shape[1])
+        # self.batchnorm_x2 = BatchNormInv(num_features=pred_mat.shape[0])
 
         self.prior_x1 = prior_x1
         self.prior_x2 = prior_x2
@@ -35,13 +31,7 @@ class RealNVP(nn.Module):
         # send to latent and predict (with Gaussian)
         z1, z2, _, _ = self.f(x1, x2)
         z2 = torch.matmul(self.pred_mat, z1.permute(1, 0)).permute(1, 0)
-        
-        # z2_upper = z2 + 1.96 * torch.diag(self.cov_cond)
-        # z2_lower = z2 - 1.96 * torch.diag(self.cov_cond)
-        # z2 = torch.cat([z2, z2_upper, z2_lower], 0)
-        
         x1_pred, x2_pred = torch.clone(z1), torch.clone(z2)
-        # x1 = torch.cat([x1]*3, 0)
         
         for i in range(len(self.t1)):
             x1_ = x1_pred * self.mask_x1[i]
@@ -56,21 +46,16 @@ class RealNVP(nn.Module):
             t2 = self.t2[i](x2cond_)
             x2_pred = x2_ + (1 - self.mask_x2[i]) * (x2_pred * torch.exp(s2) + t2)
         
-        x1_pred = self.batchnorm_x1.inverse(x1_pred)
-        x2_pred = self.batchnorm_x2.inverse(x2_pred)
+        # x1_pred = self.batchnorm_x1.inverse(x1_pred)
+        # x2_pred = self.batchnorm_x2.inverse(x2_pred)
             
         return z1, z2, x1_pred, x2_pred
 
     def f(self, x1, x2):
         # batch normalization
-        # x1 = x1.unsqueeze(2).unsqueeze(3)
-        # x2 = x2.unsqueeze(2).unsqueeze(3)
-        # x1 = x1.squeeze(3).squeeze(2)
-        # x2 = x2.squeeze(3).squeeze(2)
-        
-        x1 = self.batchnorm_x1(x1)
-        x2 = self.batchnorm_x2(x2)
-        # save batch normalized x1 and x2
+        # x1 = self.batchnorm_x1(x1)
+        # x2 = self.batchnorm_x2(x2)
+        # save: x1 and x2
         cache_batch = {'x1': x1.clone().detach(), 'x2': x2.clone().detach()}
 
         log_det_J1, z1 = x1.new_zeros(x1.shape[0]), x1
